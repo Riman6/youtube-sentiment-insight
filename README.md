@@ -23,7 +23,7 @@ aws configure
 
 ### Json data demo in postman
 
-http://localhost:5000/predict
+http://localhost:50001/predict
 
 ```python
 {
