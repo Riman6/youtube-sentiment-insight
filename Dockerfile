@@ -4,6 +4,8 @@ WORKDIR /app
 
 COPY . /app
 
+RUN apt-get update && apt-get install -y libgomp1
+
 RUN pip install -r requirements.txt
 
 CMD ["python3", "flask_api/main.py"]
