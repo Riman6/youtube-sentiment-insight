@@ -13,11 +13,8 @@ pipeline {
         stage('Continuous Integration') {
             steps {
                 script {
-                    echo "Installing dependencies"
-                    sh 'pip install -r requirements.txt'
-
-                    echo "Running tests"
-                    sh 'echo No tests configured'
+                    echo 'Installing dependencies'
+                    sh 'python3 -m pip install -r requirements.txt'
                 }
             }
         }
