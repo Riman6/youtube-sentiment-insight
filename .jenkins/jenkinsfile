@@ -1,45 +1,94 @@
 pipeline {
     agent any
 
+    environment {
+        ECR_REPOSITORY = credentials('ECR_REPOSITORY')
+        AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
+        AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
+        AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+    }
+
     stages {
 
-        stage('Checkout') {
+        stage('Continuous Integration') {
             steps {
-                git branch: 'main',
-                    url: 'https://github.com/YOUR_USERNAME/youtube-sentiment-insight.git'
+                script {
+                    echo "Installing dependencies"
+                    sh 'pip install -r requirements.txt'
+
+                    echo "Running tests"
+                    sh 'echo No tests configured'
+                }
             }
         }
 
-        stage('Install Dependencies') {
+        stage('Login to ECR') {
             steps {
-                sh 'pip install -r requirements.txt'
+                script {
+                    sh '''
+                    aws ecr get-login-password --region us-east-1 | \
+                    docker login \
+                    --username AWS \
+                    --password-stdin \
+                    ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+                    '''
+                }
             }
         }
 
-        stage('Run Tests') {
+        stage('Build Image') {
             steps {
-                sh 'echo "No tests configured yet"'
+                script {
+                    sh '''
+                    docker build \
+                    -t ${ECR_REPOSITORY}:latest .
+                    '''
+                }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Push Image') {
             steps {
-                sh 'docker build -t youtube-sentiment .'
+                script {
+                    sh '''
+                    docker push ${ECR_REPOSITORY}:latest
+                    '''
+                }
             }
         }
 
-        stage('Deploy') {
+        stage('Continuous Deployment') {
             steps {
-                sh '''
-                docker stop cnncls || true
-                docker rm cnncls || true
+                sshagent(['ssh_key']) {
+                    sh '''
+                    ssh -o StrictHostKeyChecking=no ubuntu@54.80.22.0 "
 
-                docker run -d \
-                  --name cnncls \
-                  -p 8080:8080 \
-                  youtube-sentiment
-                '''
+                    cd /home/ubuntu
+
+                    wget -O docker-compose.yml \
+                    https://raw.githubusercontent.com/Riman6/youtube-sentiment-insight/refs/heads/main/Docker-compose.yaml?token=GHSAT0AAAAAAEEZMUILUFSLQG4PX5UITNQS2T2YJYQ
+
+                    export IMAGE_NAME=${ECR_REPOSITORY}:latest
+
+                    aws ecr get-login-password --region us-east-1 | \
+                    docker login \
+                    --username AWS \
+                    --password-stdin \
+                    ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+
+                    docker compose down || true
+                    docker compose up -d
+
+                    "
+                    '''
+                }
             }
+        }
+    }
+
+    post {
+        always {
+            sh 'docker system prune -f'
         }
     }
 }
