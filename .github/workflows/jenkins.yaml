@@ -10,9 +10,7 @@ jobs:
 
     steps:
       - name: Trigger Jenkins Job
-        uses: appleboy/jenkins-action@master
-        with:
-          url: ${{ secrets.URL }}
-          user: ${{ secrets.USER }}
-          token: ${{ secrets.TOKEN }}
-          job: ${{ secrets.JOBS }}
+        run: |
+          curl -i -X POST \
+            -u "${{ secrets.USER }}:${{ secrets.TOKEN }}" \
+            "${{ secrets.URL }}/job/youtube-sentiment-insight/build"
