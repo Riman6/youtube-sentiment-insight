@@ -1,0 +1,45 @@
+pipeline {
+    agent any
+
+    stages {
+
+        stage('Checkout') {
+            steps {
+                git branch: 'main',
+                    url: 'https://github.com/YOUR_USERNAME/youtube-sentiment-insight.git'
+            }
+        }
+
+        stage('Install Dependencies') {
+            steps {
+                sh 'pip install -r requirements.txt'
+            }
+        }
+
+        stage('Run Tests') {
+            steps {
+                sh 'echo "No tests configured yet"'
+            }
+        }
+
+        stage('Build Docker Image') {
+            steps {
+                sh 'docker build -t youtube-sentiment .'
+            }
+        }
+
+        stage('Deploy') {
+            steps {
+                sh '''
+                docker stop cnncls || true
+                docker rm cnncls || true
+
+                docker run -d \
+                  --name cnncls \
+                  -p 8080:8080 \
+                  youtube-sentiment
+                '''
+            }
+        }
+    }
+}

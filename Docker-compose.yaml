@@ -1,0 +1,11 @@
+version: '3'
+
+services:
+  cnncls:
+    image: ${IMAGE_NAME}
+    container_name: cnncls
+
+    ports:
+      - "8080:8080"
+
+    restart: unless-stopped
