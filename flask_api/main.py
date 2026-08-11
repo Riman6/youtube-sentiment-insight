@@ -15,11 +15,29 @@ from nltk.stem import WordNetLemmatizer
 from mlflow.tracking import MlflowClient
 import matplotlib.dates as mdates
 import pickle
-from prometheus_flask_exporter import PrometheusMetrics
+from flask import Response
+import time
+from prometheus_client import Counter, Histogram, generate_latest
 
 app = Flask(__name__)
 CORS(app)  # Enable CORS for all routes
 
+from prometheus_client import Counter
+
+PREDICTIONS_COUNT = Counter(
+    "sentiment_predictions_total",
+    "Total sentiment predictions"
+)
+
+PREDICTION_TIME = Histogram(
+    "prediction_duration_seconds",
+    "Time spent processing predictions"
+)
+
+PREDICTION_ERRORS = Counter(
+    "prediction_errors_total",
+    "Total prediction errors"
+)
 # Define the preprocessing function
 def preprocess_comment(comment):
     """Apply preprocessing transformations to a comment."""
@@ -93,32 +111,51 @@ def home():
 def predict():
     data = request.json
     comments = data.get('comments')
-    # print("i am the comment: ", comments)
-    # print("i am the comment type: ", type(comments))
-    
+
     if not comments:
         return jsonify({"error": "No comments provided"}), 400
-        
+
+    start_time = time.time()
+
     try:
-        # Preprocess each comment before vectorizing
-        preprocessed_comments = [preprocess_comment(comment) for comment in comments]
-        
-        # Transform comments using the vectorizer
-        transformed_comments = vectorizer.transform(preprocessed_comments)
-        
-        # Convert the sparse matrix to dense format
-        dense_comments = transformed_comments.toarray() # Convert to dense array
-        
-        # Make predictions
-        predictions = model.predict(dense_comments).tolist() # Convert to list
-        
-        # Convert predictions to strings for consistency
-        # predictions = [str(pred) for pred in predictions]
+        preprocessed_comments = [
+            preprocess_comment(comment)
+            for comment in comments
+        ]
+
+        transformed_comments = vectorizer.transform(
+            preprocessed_comments
+        )
+
+        dense_comments = transformed_comments.toarray()
+
+        predictions = model.predict(
+            dense_comments
+        ).tolist()
+
+        PREDICTIONS_COUNT.inc()
+
     except Exception as e:
-        return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
-        
-    # Return the response with original comments and predicted sentiments
-    response = [{"comment": comment, "sentiment": sentiment} for comment, sentiment in zip(comments, predictions)]
+        PREDICTION_ERRORS.inc()
+        return jsonify(
+            {"error": f"Prediction failed: {str(e)}"}
+        ), 500
+
+    PREDICTION_TIME.observe(
+        time.time() - start_time
+    )
+
+    response = [
+        {
+            "comment": comment,
+            "sentiment": sentiment
+        }
+        for comment, sentiment in zip(
+            comments,
+            predictions
+        )
+    ]
+
     return jsonify(response)
 
  
@@ -325,6 +362,12 @@ def generate_trend_graph():
         return jsonify({"error": f"Trend graph generation failed: {str(e)}"}), 500
 
 
+@app.route("/metrics")
+def metrics():
+    return Response(
+        generate_latest(),
+        mimetype="text/plain"
+    )
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=8080 , debug=True)
