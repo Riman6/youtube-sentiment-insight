@@ -3,7 +3,7 @@ version: '3'
 services:
 
   cnncls:
-    image: ${IMAGE_NAME}
+    image: 478982785567.dkr.ecr.us-east-1.amazonaws.com/mlops_project:latest
     container_name: cnncls
 
     ports:
