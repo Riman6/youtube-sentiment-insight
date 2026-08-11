@@ -101,6 +101,10 @@ pipeline {
                                 --password-stdin ${ECR_REGISTRY}
 
                                 echo 'Stopping old container'
+                                echo 'Downloading Prometheus config'
+
+                                wget -O prometheus.yml \
+                                https://raw.githubusercontent.com/Riman6/youtube-sentiment-insight/main/prometheus.yml
 
                                 docker compose down || true
 
