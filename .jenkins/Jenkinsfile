@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -6,6 +7,10 @@ pipeline {
         AWS_ACCOUNT_ID = credentials('AWS_ACCOUNT_ID')
         AWS_ACCESS_KEY_ID = credentials('AWS_ACCESS_KEY_ID')
         AWS_SECRET_ACCESS_KEY = credentials('AWS_SECRET_ACCESS_KEY')
+
+        AWS_REGION = 'us-east-1'
+        ECR_REGISTRY = "${AWS_ACCOUNT_ID}.dkr.ecr.${AWS_REGION}.amazonaws.com"
+        IMAGE_NAME = "${ECR_REPOSITORY}:latest"
     }
 
     stages {
@@ -13,24 +18,32 @@ pipeline {
         stage('Continuous Integration') {
             steps {
                 script {
-                    echo 'Creating virtual environment'
-                    sh 'python3 -m venv .venv'
+                    echo 'Running Continuous Integration'
 
-                    echo 'Installing dependencies'
-                    sh '.venv/bin/pip install -r requirements.txt'
+                    sh '''
+                        test -f Dockerfile
+                        test -f requirements.txt
+
+                        echo "Docker version:"
+                        docker --version
+
+                        echo "AWS CLI version:"
+                        aws --version
+                    '''
                 }
             }
         }
-        
+
         stage('Login to ECR') {
             steps {
                 script {
+                    echo 'Logging in to Amazon ECR'
+
                     sh '''
-                    aws ecr get-login-password --region us-east-1 | \
-                    docker login \
-                    --username AWS \
-                    --password-stdin \
-                    ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+                        aws ecr get-login-password --region ${AWS_REGION} | \
+                        docker login \
+                        --username AWS \
+                        --password-stdin ${ECR_REGISTRY}
                     '''
                 }
             }
@@ -39,9 +52,12 @@ pipeline {
         stage('Build Image') {
             steps {
                 script {
+                    echo "Building Docker image"
+
                     sh '''
-                    docker build \
-                    -t ${ECR_REPOSITORY}:latest .
+                        docker build \
+                        -t ${ECR_REGISTRY}/${IMAGE_NAME} \
+                        .
                     '''
                 }
             }
@@ -50,8 +66,10 @@ pipeline {
         stage('Push Image') {
             steps {
                 script {
+                    echo "Pushing Docker image to ECR"
+
                     sh '''
-                    docker push ${ECR_REPOSITORY}:latest
+                        docker push ${ECR_REGISTRY}/${IMAGE_NAME}
                     '''
                 }
             }
@@ -59,28 +77,46 @@ pipeline {
 
         stage('Continuous Deployment') {
             steps {
-                sshagent(['ssh_key']) {
-                    sh '''
-                    ssh -o StrictHostKeyChecking=no ubuntu@54.221.0.125 "
+                script {
+                    echo 'Deploying application to EC2'
 
-                    cd /home/ubuntu
+                    sshagent(['ssh_key']) {
+                        sh '''
+                            ssh -o StrictHostKeyChecking=no ubuntu@54.221.0.125 "
+                                set -e
 
-                    wget -O docker-compose.yml \
-                    https://raw.githubusercontent.com/Riman6/youtube-sentiment-insight/refs/heads/main/Docker-compose.yaml?token=GHSAT0AAAAAAEEZMUILUFSLQG4PX5UITNQS2T2YJYQ
+                                cd /home/ubuntu
 
-                    export IMAGE_NAME=${ECR_REPOSITORY}:latest
+                                echo 'Downloading docker-compose file'
 
-                    aws ecr get-login-password --region us-east-1 | \
-                    docker login \
-                    --username AWS \
-                    --password-stdin \
-                    ${AWS_ACCOUNT_ID}.dkr.ecr.us-east-1.amazonaws.com
+                                wget -O docker-compose.yaml \
+                                https://raw.githubusercontent.com/Riman6/youtube-sentiment-insight/main/Docker-compose.yaml
 
-                    docker compose down || true
-                    docker compose up -d
+                                export IMAGE_NAME=${ECR_REGISTRY}/${IMAGE_NAME}
 
-                    "
-                    '''
+                                echo 'Logging in to ECR'
+
+                                aws ecr get-login-password --region ${AWS_REGION} | \
+                                docker login \
+                                --username AWS \
+                                --password-stdin ${ECR_REGISTRY}
+
+                                echo 'Stopping old container'
+
+                                docker compose down || true
+
+                                echo 'Pulling new image'
+
+                                docker compose pull
+
+                                echo 'Starting new container'
+
+                                docker compose up -d
+
+                                echo 'Deployment completed'
+                            "
+                        '''
+                    }
                 }
             }
         }
@@ -88,7 +124,20 @@ pipeline {
 
     post {
         always {
-            sh 'docker system prune -f'
+            echo 'Cleaning Docker resources'
+
+            sh '''
+                docker system prune -f || true
+            '''
+        }
+
+        success {
+            echo 'Pipeline completed successfully!'
+        }
+
+        failure {
+            echo 'Pipeline failed. Check the console output.'
         }
     }
 }
+```
