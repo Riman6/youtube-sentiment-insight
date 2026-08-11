@@ -81,7 +81,7 @@ pipeline {
 
                     sshagent(['ssh_key']) {
                         sh '''
-                            ssh -o StrictHostKeyChecking=no ubuntu@54.221.0.125 "
+                            ssh -o StrictHostKeyChecking=no ubuntu@52.45.126.20 "
                                 set -e
 
                                 cd /home/ubuntu
