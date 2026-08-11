@@ -1,33 +1,40 @@
-version: '3'
-
 services:
 
   cnncls:
     image: 478982785567.dkr.ecr.us-east-1.amazonaws.com/mlops_project:latest
     container_name: cnncls
-
     ports:
       - "8080:8080"
-
     restart: unless-stopped
+    networks:
+      monitoring:
+        ipv4_address: 172.18.0.10
 
   prometheus:
     image: prom/prometheus
     container_name: prometheus
-
     ports:
       - "9090:9090"
-
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml
-
     restart: unless-stopped
+    networks:
+      monitoring:
+        ipv4_address: 172.18.0.11
 
   grafana:
     image: grafana/grafana
     container_name: grafana
-
     ports:
       - "3000:3000"
-
     restart: unless-stopped
+    networks:
+      monitoring:
+        ipv4_address: 172.18.0.12
+
+networks:
+  monitoring:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.18.0.0/16
