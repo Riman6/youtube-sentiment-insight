@@ -186,8 +186,16 @@ def predict_with_timestamps():
         
         # Convert predictions to strings for consistency
         predictions = [str(pred) for pred in predictions]
+
+        # Increment Prometheus counter
+        PREDICTIONS_COUNT.inc(amount=len(comments))
+
+
     except Exception as e:
         return jsonify({"error": f"Prediction failed: {str(e)}"}), 500
+    
+        
+    
     
     # Return the response with original comments, predicted sentiments, and timestamps
     response = [{"comment": comment, "sentiment": sentiment, "timestamp": timestamp} for comment, sentiment, timestamp in zip(comments, predictions, timestamps)]
