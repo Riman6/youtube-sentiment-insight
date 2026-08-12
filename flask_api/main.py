@@ -133,7 +133,7 @@ def predict():
             dense_comments
         ).tolist()
 
-        PREDICTIONS_COUNT.inc()
+        PREDICTIONS_COUNT.inc(amount=len(comments))
 
     except Exception as e:
         PREDICTION_ERRORS.inc()
